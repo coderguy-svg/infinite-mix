@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Infinite Mix</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --panel: rgba(255,255,255,.92);
+    --text: #1e293b;
+    --muted: #64748b;
+    --accent: #6366f1;
+    --border: #e2e8f0;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; width: 100%; height: 100%;
+    overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text);
+    overscroll-behavior: none;
+  }
+  body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  .app { height: 100%; display: flex; flex-direction: column; }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 12px 14px; background: var(--panel);
+    border-bottom: 1px solid var(--border); backdrop-filter: blur(14px);
+    z-index: 5;
+  }
+  h1 { font-size: 21px; margin: 0; letter-spacing: -.6px; }
+  .subtitle { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  button, input {
+    font: inherit;
+  }
+  button {
+    border: 1px solid var(--border); background: white; color: var(--text);
+    border-radius: 12px; padding: 10px 12px; font-weight: 650; cursor: pointer;
+    touch-action: manipulation;
+  }
+  button:active { transform: scale(.97); }
+  .top-actions { display: flex; gap: 7px; }
+  .primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .workspace {
+    flex: 1; min-height: 0; display: flex; position: relative; overflow: hidden;
+  }
+  .elements-panel {
+    width: 270px; max-width: 42%; display: flex; flex-direction: column;
+    background: var(--panel); border-right: 1px solid var(--border); z-index: 3;
+  }
+  .panel-heading { padding: 13px 12px 8px; font-weight: 750; }
+  .search {
+    margin: 0 10px 10px; width: calc(100% - 20px); padding: 11px;
+    border: 1px solid var(--border); border-radius: 12px; outline: none;
+    background: white; font-size: 16px;
+  }
+  .elements { overflow-y: auto; padding: 0 9px 12px; }
+  .element {
+    display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+    margin: 5px 0; padding: 10px; border-radius: 13px; background: white;
+  }
+  .emoji { font-size: 23px; width: 30px; text-align: center; flex: 0 0 30px; }
+  .element-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .count { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .board-wrap { flex: 1; min-width: 0; position: relative; overflow: hidden; }
+  .board {
+    position: absolute; inset: 0; overflow: hidden;
+    background:
+      radial-gradient(circle at 1px 1px, rgba(100,116,139,.14) 1px, transparent 1px);
+    background-size: 24px 24px;
+    touch-action: none;
+  }
+  .hint {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    text-align: center; color: var(--muted); pointer-events: none; width: 85%;
+  }
+  .hint strong { display: block; color: var(--text); font-size: 20px; margin-bottom: 7px; }
+  .tile {
+    position: absolute; min-width: 88px; max-width: 160px;
+    padding: 10px 12px; border-radius: 15px; background: white;
+    border: 1px solid rgba(148,163,184,.45); box-shadow: 0 5px 18px rgba(15,23,42,.1);
+    text-align: center; user-select: none; touch-action: none; cursor: grab;
+  }
+  .tile .tile-emoji { font-size: 28px; line-height: 1.1; }
+  .tile .tile-name { font-size: 13px; font-weight: 750; margin-top: 5px; overflow-wrap: anywhere; }
+  .tile.selected { outline: 3px solid var(--accent); }
+  .drop-zone {
+    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+    padding: 9px 14px; background: rgba(255,255,255,.9); border: 1px solid var(--border);
+    border-radius: 999px; color: var(--muted); font-size: 12px; pointer-events: none;
+  }
+  .mobile-bar {
+    display: none; padding: 8px; gap: 8px; background: var(--panel);
+    border-top: 1px solid var(--border);
+  }
+  .mobile-bar button { flex: 1; }
+  .stats { font-size: 12px; color: var(--muted); padding: 8px 12px; border-top: 1px solid var(--border); }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom));
+    transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+    background: #0f172a; color: white; padding: 12px 16px; border-radius: 999px;
+    font-size: 14px; transition: .2s; z-index: 20; max-width: 90%; text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  @media (max-width: 700px) {
+    header { padding: 10px; }
+    h1 { font-size: 19px; }
+    .elements-panel { width: 42%; max-width: none; }
+    .panel-heading { font-size: 14px; padding: 10px 9px 7px; }
+    .element { padding: 9px 7px; gap: 6px; }
+    .emoji { font-size: 21px; width: 26px; flex-basis: 26px; }
+    .element-name { font-size: 12px; }
+    .count { display: none; }
+    .top-actions button { padding: 9px 10px; font-size: 12px; }
+    .mobile-bar { display: flex; }
+    .stats { display: none; }
+    .tile { min-width: 76px; padding: 8px; }
+    .tile .tile-emoji { font-size: 25px; }
+    .tile .tile-name { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>✨ Infinite Mix</h1>
+      <div class="subtitle">Combine anything. Discover everything.</div>
+    </div>
+    <div class="top-actions">
+      <button id="clearBtn">Clear</button>
+      <button id="helpBtn">How to play</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="elements-panel">
+      <div class="panel-heading">Your elements</div>
+      <input id="search" class="search" placeholder="Search elements…" autocomplete="off" />
+      <div id="elements" class="elements"></div>
+      <div class="stats"><span id="discovered">4</span> discovered</div>
+    </aside>
+    <main class="board-wrap">
+      <div id="board" class="board">
+        <div id="hint" class="hint">
+          <strong>Start creating</strong>
+          Drag two elements together to combine them.
+        </div>
+        <div class="drop-zone">Drop elements together to mix</div>
+      </div>
+    </main>
+  </div>
+  <div class="mobile-bar">
+    <button id="addAllBtn">Add basics</button>
+    <button id="randomBtn" class="primary">Surprise me</button>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+const recipes = {
+  "fire+water": ["steam","💨"],
+  "earth+water": ["plant","🌱"],
+  "earth+fire": ["lava","🌋"],
+  "air+fire": ["energy","⚡"],
+  "air+water": ["mist","🌫️"],
+  "earth+earth": ["land","🏞️"],
+  "fire+fire": ["heat","🔥"],
+  "water+water": ["puddle","💧"],
+  "air+air": ["wind","🌬️"],
+  "earth+plant": ["tree","🌳"],
+  "plant+water": ["algae","🪴"],
+  "fire+plant": ["ash","🪨"],
+  "energy+water": ["life","🧬"],
+  "energy+earth": ["stone","🪨"],
+  "energy+air": ["lightning","🌩️"],
+  "lava+water": ["obsidian","⬛"],
+  "lava+earth": ["volcano","🌋"],
+  "steam+air": ["cloud","☁️"],
+  "cloud+water": ["rain","🌧️"],
+  "rain+earth": ["mud","🟤"],
+  "mud+fire": ["brick","🧱"],
+  "mud+plant": ["swamp","🐊"],
+  "tree+tree": ["forest","🌲"],
+  "tree+earth": ["wood","🪵"],
+  "tree+fire": ["charcoal","🖤"],
+  "life+earth": ["animal","🐾"],
+  "life+water": ["fish","🐟"],
+  "life+air": ["bird","🐦"],
+  "animal+earth": ["human","🧑"],
+  "human+human": ["family","👨‍👩‍👧‍👦"],
+  "human+fire": ["wizard","🧙"],
+  "human+water": ["swimmer","🏊"],
+  "human+air": ["pilot","🧑‍✈️"],
+  "bird+fire": ["phoenix","🔥"],
+  "fish+water": ["whale","🐋"],
+  "forest+animal": ["jungle","🌴"],
+  "wood+fire": ["paper","📄"],
+  "paper+fire": ["book","📖"],
+  "book+human": ["knowledge","🧠"],
+  "knowledge+human": ["science","🔬"],
+  "science+energy": ["technology","💻"],
+  "technology+human": ["robot","🤖"],
+  "robot+human": ["cyborg","🦾"],
+  "cloud+energy": ["storm","⛈️"],
+  "storm+water": ["hurricane","🌀"],
+  "rain+rain": ["rainbow","🌈"],
+  "sun+water": ["rainbow","🌈"],
+  "fire+star": ["sun","☀️"],
+  "star+star": ["galaxy","🌌"],
+  "space+earth": ["planet","🪐"],
+  "planet+planet": ["solar system","🌞"],
+  "human+planet": ["astronaut","👨‍🚀"],
+  "astronaut+space": ["explorer","🧭"],
+  "time+human": ["history","🏛️"],
+  "sand+fire": ["glass","🪟"],
+  "glass+sand": ["hourglass","⌛"],
+  "stone+fire": ["metal","⚙️"],
+  "metal+energy": ["electricity","🔌"],
+  "electricity+technology": ["internet","🌐"],
+  "internet+human": ["social media","📱"],
+  "water+sun": ["rainbow","🌈"],
+  "plant+sun": ["flower","🌸"],
+  "flower+human": ["garden","🌷"],
+  "garden+human": ["park","🏞️"],
+  "human+book": ["author","✍️"],
+  "author+book": ["novel","📚"],
+  "human+metal": ["tool","🔧"],
+  "tool+wood": ["house","🏠"],
+  "house+human": ["family","👨‍👩‍👧‍👦"],
+  "house+house": ["city","🏙️"],
+  "city+city": ["country","🗺️"],
+  "country+country": ["world","🌍"],
+  "world+space": ["universe","🌌"],
+  "universe+universe": ["multiverse","🌀"]
+};
+
+const basics = [
+  ["fire","🔥"],["water","💧"],["earth","🌍"],["air","💨"]
+];
+let discovered = new Map(basics);
+let placed = [];
+let nextId = 1;
+let dragState = null;
+const board = document.getElementById("board");
+const elementsEl = document.getElementById("elements");
+const searchEl = document.getElementById("search");
+const hint = document.getElementById("hint");
+const toast = document.getElementById("toast");
+
+function key(a,b){ return [a,b].sort().join("+"); }
+function showToast(msg) {
+  toast.textContent = msg; toast.classList.add("show");
+  clearTimeout(showToast.t); showToast.t = setTimeout(()=>toast.classList.remove("show"), 1800);
+}
+function renderElements() {
+  const q = searchEl.value.toLowerCase().trim();
+  elementsEl.innerHTML = "";
+  [...discovered.entries()].filter(([name])=>name.includes(q)).sort().forEach(([name,emoji])=>{
+    const btn = document.createElement("button");
+    btn.className = "element";
+    btn.innerHTML = `<span class="emoji">${emoji}</span><span class="element-name">${name}</span><span class="count">＋</span>`;
+    btn.addEventListener("click",()=>addTile(name,emoji));
+    elementsEl.appendChild(btn);
+  });
+  document.getElementById("discovered").textContent = discovered.size;
+}
+function addTile(name, emoji, x, y) {
+  const rect = board.getBoundingClientRect();
+  if (x == null) x = Math.max(8, rect.width/2 - 50 + (Math.random()*80-40));
+  if (y == null) y = Math.max(8, rect.height/2 - 50 + (Math.random()*80-40));
+  const tile = {id:nextId++, name, emoji, x, y};
+  placed.push(tile); drawTile(tile); hint.style.display = "none";
+}
+function drawTile(t) {
+  const el = document.createElement("div");
+  el.className = "tile"; el.dataset.id = t.id;
+  el.innerHTML = `<div class="tile-emoji">${t.emoji}</div><div class="tile-name">${t.name}</div>`;
+  el.style.left = t.x+"px"; el.style.top = t.y+"px";
+  el.addEventListener("pointerdown", e=>startDrag(e,t,el));
+  board.appendChild(el);
+}
+function startDrag(e,t,el) {
+  e.preventDefault();
+  const br = board.getBoundingClientRect();
+  dragState = {t,el,offsetX:e.clientX-br.left-t.x,offsetY:e.clientY-br.top-t.y};
+  el.classList.add("selected"); el.setPointerCapture?.(e.pointerId);
+  el.style.zIndex = 10;
+  el.addEventListener("pointermove",moveDrag);
+  el.addEventListener("pointerup",endDrag,{once:true});
+  el.addEventListener("pointercancel",endDrag,{once:true});
+}
+function moveDrag(e) {
+  if(!dragState) return;
+  const br=board.getBoundingClientRect(), t=dragState.t;
+  t.x=Math.max(0,Math.min(br.width-70,e.clientX-br.left-dragState.offsetX));
+  t.y=Math.max(0,Math.min(br.height-70,e.clientY-br.top-dragState.offsetY));
+  dragState.el.style.left=t.x+"px"; dragState.el.style.top=t.y+"px";
+}
+function endDrag() {
+  if(!dragState) return;
+  const current=dragState; dragState=null;
+  current.el.classList.remove("selected"); current.el.style.zIndex="";
+  current.el.removeEventListener("pointermove",moveDrag);
+  const a=current.t;
+  const hit=placed.find(b=>b.id!==a.id && Math.abs((a.x+40)-(b.x+40))<65 && Math.abs((a.y+35)-(b.y+35))<65);
+  if(hit) combine(a,hit);
+}
+function combine(a,b) {
+  const result=recipes[key(a.name,b.name)];
+  if(!result) { showToast("Those elements don't combine yet."); return; }
+  placed=placed.filter(t=>t.id!==a.id && t.id!==b.id);
+  board.querySelectorAll(`.tile[data-id="${a.id}"], .tile[data-id="${b.id}"]`).forEach(el=>el.remove());
+  const [name,emoji]=result;
+  const fresh=!discovered.has(name);
+  discovered.set(name,emoji); renderElements();
+  addTile(name,emoji,(a.x+b.x)/2,(a.y+b.y)/2);
+  showToast(fresh ? `🎉 Discovered ${name}!` : `Made ${name}!`);
+}
+function clearBoard() {
+  placed=[]; board.querySelectorAll(".tile").forEach(el=>el.remove()); hint.style.display="";
+}
+document.getElementById("clearBtn").onclick=clearBoard;
+document.getElementById("helpBtn").onclick=()=>alert("How to play\\n\\n1. Tap an element to place it on the board.\\n2. Drag elements together.\\n3. If they can combine, a new element appears.\\n4. Keep experimenting to discover new things!\\n\\nOn iPhone and iPad, touch and drag works just like a game.");
+document.getElementById("addAllBtn").onclick=()=>basics.forEach(([n,e],i)=>addTile(n,e,30+i*85,50));
+document.getElementById("randomBtn").onclick=()=>{
+  const arr=[...discovered.entries()];
+  const a=arr[Math.floor(Math.random()*arr.length)], b=arr[Math.floor(Math.random()*arr.length)];
+  addTile(a[0],a[1],80,100); addTile(b[0],b[1],180,160);
+};
+searchEl.addEventListener("input",renderElements);
+renderElements();
+</script>
+</body>
+</html>
